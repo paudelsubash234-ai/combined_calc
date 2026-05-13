@@ -1,0 +1,155 @@
+// ── Disable pull-to-refresh on Android Chrome ─────────────
+document.addEventListener('touchmove', function(e) {
+  if (e.touches.length > 1) return;
+  const el = e.target.closest('#home-view');
+  if (!el) { e.preventDefault(); return; }
+  const atTop    = el.scrollTop <= 0;
+  const goingDown = e.touches[0].clientY < (el._startY || 0);
+  if (atTop && !goingDown) e.preventDefault();
+}, { passive: false });
+
+document.addEventListener('touchstart', function(e) {
+  const el = e.target.closest('#home-view');
+  if (el) el._startY = e.touches[0].clientY;
+}, { passive: true });
+
+// ── Fix iframe black screen when Android keyboard opens ────
+// When keyboard opens, visualViewport shrinks but window doesn't
+// We reposition #iframe-view to match visual viewport exactly
+function fixIframeOnKeyboard() {
+  const iv = document.getElementById('iframe-view');
+  if (!iv || !iv.classList.contains('on')) return;
+  const vv = window.visualViewport;
+  if (!vv) return;
+  const topbarH = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--th')) || 60;
+  const offsetTop  = vv.offsetTop;
+  const offsetLeft = vv.offsetLeft;
+  iv.style.top    = Math.max(topbarH, offsetTop + topbarH) + 'px';
+  iv.style.left   = offsetLeft + 'px';
+  iv.style.width  = vv.width + 'px';
+  iv.style.height = (vv.height - topbarH) + 'px';
+}
+
+function resetIframeSize() {
+  const iv = document.getElementById('iframe-view');
+  if (!iv) return;
+  iv.style.top    = '';
+  iv.style.left   = '';
+  iv.style.width  = '';
+  iv.style.height = '';
+}
+
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', fixIframeOnKeyboard);
+  window.visualViewport.addEventListener('scroll', fixIframeOnKeyboard);
+}
+
+// ── Projects Map ───────────────────────────────────────────
+const sites = {
+  interest_calc:  'https://paudelsubash234-ai.github.io/interest_calc/',
+  Tax_calculator: 'https://paudelsubash234-ai.github.io/Tax_calculator/',
+  latefee:        'https://paudelsubash234-ai.github.io/latefee/',
+  surrender_calc: 'https://paudelsubash234-ai.github.io/surrender_calc/'
+};
+
+const frame      = document.getElementById('frame');
+const iframeView = document.getElementById('iframe-view');
+const homeView   = document.getElementById('home-view');
+const bar        = document.getElementById('bar');
+const titleEl    = document.getElementById('topbar-title');
+const sidebar    = document.getElementById('sidebar');
+const mainEl     = document.getElementById('main');
+const overlay    = document.getElementById('overlay');
+let activeBtn    = document.getElementById('btn-home');
+let sidebarOpen  = true;
+
+const labels = {
+  interest_calc:  'Interest Calculator',
+  Tax_calculator: 'Tax Calculator',
+  latefee:        'Late Fee Settlement',
+  surrender_calc: 'Surrender Calculator'
+};
+
+function setActive(btn) {
+  if (activeBtn) activeBtn.classList.remove('active');
+  activeBtn = btn;
+  if (btn) btn.classList.add('active');
+}
+
+function showHome() {
+  iframeView.classList.remove('on');
+  resetIframeSize();
+  setTimeout(() => {
+    homeView.classList.remove('off');
+    frame.src = '';
+    titleEl.textContent = 'Home';
+  }, 250);
+  setActive(document.getElementById('btn-home'));
+  history.pushState({}, '', location.pathname);
+}
+
+function loadSite(key, btn) {
+  const url = sites[key];
+  if (!url) return;
+
+  homeView.classList.add('off');
+
+  bar.style.transition = 'none';
+  bar.style.width = '0%';
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    bar.style.transition = 'width 1.2s ease';
+    bar.style.width = '75%';
+  }));
+
+  setTimeout(() => { frame.src = url; }, 220);
+
+  frame.onload = () => {
+    bar.style.transition = 'width .3s ease';
+    bar.style.width = '100%';
+    setTimeout(() => {
+      bar.style.opacity = '0';
+      setTimeout(() => {
+        bar.style.width = '0%';
+        bar.style.opacity = '1';
+      }, 400);
+    }, 300);
+  };
+
+  setTimeout(() => {
+    iframeView.classList.add('on');
+    resetIframeSize(); // start with full size
+  }, 260);
+
+  setActive(btn);
+  titleEl.textContent = labels[key] || key;
+  history.pushState({}, '', '?project=' + key);
+}
+
+function toggleSidebar() {
+  if (window.innerWidth <= 700) {
+    const isOpen = sidebar.classList.toggle('open');
+    overlay.classList.toggle('show', isOpen);
+  } else {
+    sidebarOpen = !sidebarOpen;
+    sidebar.classList.toggle('hide', !sidebarOpen);
+    mainEl.classList.toggle('full', !sidebarOpen);
+  }
+}
+
+function toggleTheme() {
+  const isLight = document.body.classList.toggle('light');
+  document.body.classList.toggle('dark', !isLight);
+  document.getElementById('theme-icon').textContent = isLight ? 'dark_mode' : 'light_mode';
+  document.getElementById('theme-label').textContent = isLight ? 'Dark Mode' : 'Light Mode';
+}
+
+window.addEventListener('popstate', () => {
+  const p = new URLSearchParams(location.search).get('project');
+  if (p && sites[p]) loadSite(p, document.getElementById('btn-' + p));
+  else showHome();
+});
+
+window.addEventListener('DOMContentLoaded', () => {
+  const p = new URLSearchParams(location.search).get('project');
+  if (p && sites[p]) loadSite(p, document.getElementById('btn-' + p));
+});
